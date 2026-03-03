@@ -1,0 +1,180 @@
+{
+  "schema_version": "weekly-report.v1",
+  "tool_version": "0.1.0",
+  "generated_at": "__GENERATED_AT__",
+  "report_date": "2026-02-25",
+  "input": {
+    "source": "db",
+    "db_path": "data/footstat.sqlite3",
+    "competition_code": "E0",
+    "teams": [
+      "Arsenal"
+    ],
+    "side": "both",
+    "seasons": [
+      "2025-2026"
+    ],
+    "metrics": [
+      "shots",
+      "opponent_fouls"
+    ],
+    "z_threshold": 2.0,
+    "regime_effect_threshold": 0.8
+  },
+  "teams": [
+    {
+      "team": "Arsenal",
+      "seasons": [
+        {
+          "season": "2025-2026",
+          "summary": {
+            "matches": 4,
+            "wins": 2,
+            "draws": 1,
+            "losses": 1,
+            "latest_half_win_average": 0.625,
+            "latest_running_league_points": 7.0,
+            "findings_count": 0
+          },
+          "weekly_rows": [
+            {
+              "week": 1,
+              "date": "10/08/2025",
+              "opponent": "Team A",
+              "venue": "home",
+              "result": "win",
+              "half_win_average": 1.0,
+              "running_half_win_points": 1.0,
+              "running_league_points": 3.0,
+              "points_efficiency": 1.0,
+              "goals_for": 2,
+              "goals_against": 0,
+              "goal_diff": 2,
+              "shots": 14,
+              "shots_on_target": 6,
+              "corners": 5,
+              "fouls": 10,
+              "yellow_cards": 1,
+              "red_cards": 0,
+              "opponent_shots": 8,
+              "opponent_shots_on_target": 2,
+              "opponent_corners": 4,
+              "opponent_fouls": 12,
+              "opponent_yellow_cards": 2,
+              "opponent_red_cards": 0,
+              "bookings_points": null,
+              "opponent_bookings_points": null,
+              "referee": "Ref 1",
+              "attendance": 60000
+            },
+            {
+              "week": 2,
+              "date": "17/08/2025",
+              "opponent": "Team B",
+              "venue": "away",
+              "result": "draw",
+              "half_win_average": 0.75,
+              "running_half_win_points": 1.5,
+              "running_league_points": 4.0,
+              "points_efficiency": 0.666667,
+              "goals_for": 1,
+              "goals_against": 1,
+              "goal_diff": 0,
+              "shots": 10,
+              "shots_on_target": 4,
+              "corners": 4,
+              "fouls": 9,
+              "yellow_cards": 2,
+              "red_cards": 0,
+              "opponent_shots": 9,
+              "opponent_shots_on_target": 3,
+              "opponent_corners": 5,
+              "opponent_fouls": 11,
+              "opponent_yellow_cards": 1,
+              "opponent_red_cards": 0,
+              "bookings_points": null,
+              "opponent_bookings_points": null,
+              "referee": "Ref 2",
+              "attendance": 50000
+            },
+            {
+              "week": 3,
+              "date": "24/08/2025",
+              "opponent": "Team C",
+              "venue": "home",
+              "result": "loss",
+              "half_win_average": 0.5,
+              "running_half_win_points": 1.5,
+              "running_league_points": 4.0,
+              "points_efficiency": 0.444444,
+              "goals_for": 0,
+              "goals_against": 1,
+              "goal_diff": -1,
+              "shots": 9,
+              "shots_on_target": 3,
+              "corners": 6,
+              "fouls": 12,
+              "yellow_cards": 3,
+              "red_cards": 0,
+              "opponent_shots": 11,
+              "opponent_shots_on_target": 4,
+              "opponent_corners": 3,
+              "opponent_fouls": 10,
+              "opponent_yellow_cards": 2,
+              "opponent_red_cards": 0,
+              "bookings_points": null,
+              "opponent_bookings_points": null,
+              "referee": "Ref 3",
+              "attendance": 62000
+            },
+            {
+              "week": 4,
+              "date": "31/08/2025",
+              "opponent": "Team D",
+              "venue": "away",
+              "result": "win",
+              "half_win_average": 0.625,
+              "running_half_win_points": 2.5,
+              "running_league_points": 7.0,
+              "points_efficiency": 0.583333,
+              "goals_for": 3,
+              "goals_against": 1,
+              "goal_diff": 2,
+              "shots": 15,
+              "shots_on_target": 7,
+              "corners": 7,
+              "fouls": 8,
+              "yellow_cards": 1,
+              "red_cards": 0,
+              "opponent_shots": 10,
+              "opponent_shots_on_target": 3,
+              "opponent_corners": 4,
+              "opponent_fouls": 9,
+              "opponent_yellow_cards": 2,
+              "opponent_red_cards": 0,
+              "bookings_points": null,
+              "opponent_bookings_points": null,
+              "referee": "Ref 4",
+              "attendance": 54000
+            }
+          ],
+          "metric_series": {
+            "shots": [
+              14.0,
+              10.0,
+              9.0,
+              15.0
+            ],
+            "opponent_fouls": [
+              12.0,
+              11.0,
+              10.0,
+              9.0
+            ]
+          },
+          "findings": []
+        }
+      ]
+    }
+  ]
+}

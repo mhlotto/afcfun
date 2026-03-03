@@ -1,0 +1,20 @@
+{
+  "entries": [
+    {
+      "team": "Arsenal",
+      "week": 3,
+      "title": "Week 3: quick recap",
+      "text": "Tough away result, but xG and shot volume stayed healthy.",
+      "image": "assets/arsenal-week3.png",
+      "video": "assets/arsenal-week3.mp4",
+      "link_url": "https://example.com/arsenal/week-3",
+      "link_label": "Read full match notes"
+    },
+    {
+      "team": "Arsenal",
+      "week": 8,
+      "title": "Week 8 tactical note",
+      "text": "Pressing shape changed after halftime and reduced chances conceded."
+    }
+  ]
+}

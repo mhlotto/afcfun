@@ -1,0 +1,28 @@
+{
+  "rankings": {
+    "league_xg_rank": 2,
+    "league_press_rank": 6
+  },
+  "deltas_vs_season_avg": {
+    "xg_diff": 0.82,
+    "press_intensity": -7.4,
+    "progressive_passes": 14.0
+  },
+  "anomalies": [
+    {
+      "kind": "defensive_line_height",
+      "description": "Lowest defensive line height of season",
+      "severity": "info",
+      "scope": "week"
+    },
+    {
+      "kind": "right_overload_ratio",
+      "description": "Highest right-side overload ratio",
+      "severity": "info",
+      "scope": "week"
+    }
+  ],
+  "notes": [
+    "Synthetic example overlay file for LLM ideation context."
+  ]
+}
