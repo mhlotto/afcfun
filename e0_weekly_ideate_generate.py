@@ -102,6 +102,23 @@ def ideation_json_schema() -> dict[str, Any]:
             "season_to_date_signal",
         ],
     }
+    chart_plan_item = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "id": {"type": "string"},
+            "title": {"type": "string"},
+            "priority": {"type": "string", "enum": ["primary", "secondary", "optional"]},
+            "chart_type": {
+                "type": "string",
+                "enum": ["metric_trend", "result_form", "metric_compare", "opponent_profile"],
+            },
+            "metrics": {"type": "array", "items": {"type": "string"}},
+            "target": {"type": "string", "enum": ["main", "backing"]},
+            "why": {"type": "string"},
+        },
+        "required": ["id", "title", "priority", "chart_type", "metrics", "target", "why"],
+    }
     return {
         "type": "json_schema",
         "name": "weekly_ideation_pack",
@@ -142,6 +159,7 @@ def ideation_json_schema() -> dict[str, Any]:
                 },
                 "hypotheses": {"type": "array", "items": hypothesis_item},
                 "story_candidates": {"type": "array", "items": story_item},
+                "chart_plan": {"type": "array", "items": chart_plan_item},
                 "recommended_story": {
                     "type": "object",
                     "additionalProperties": False,
@@ -168,6 +186,7 @@ def ideation_json_schema() -> dict[str, Any]:
                 "state_snapshot",
                 "hypotheses",
                 "story_candidates",
+                "chart_plan",
                 "recommended_story",
                 "data_gaps",
                 "next_week_data_to_collect",

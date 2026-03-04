@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -10,6 +12,7 @@ from typing import Any
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-5"
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 
 
 def api_key_from_env() -> str:
@@ -27,6 +30,42 @@ def model_from_env(default: str = DEFAULT_MODEL) -> str:
     return os.environ.get("OPENAI_MODEL", default).strip() or default
 
 
+def max_retries_from_env(default: int = 4) -> int:
+    raw = os.environ.get("OPENAI_MAX_RETRIES", str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(0, value)
+
+
+def retry_backoff_seconds_from_env(default: float = 1.5) -> float:
+    raw = os.environ.get("OPENAI_RETRY_BACKOFF_SECONDS", str(default)).strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return max(0.1, value)
+
+
+def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
+    retry_after = exc.headers.get("Retry-After")
+    if retry_after is None:
+        return None
+    try:
+        return max(0.0, float(retry_after))
+    except ValueError:
+        return None
+
+
+def _sleep_for_retry(*, base_backoff: float, attempt: int, retry_after: float | None = None) -> None:
+    if retry_after is not None:
+        sleep_seconds = retry_after
+    else:
+        sleep_seconds = (base_backoff * (2 ** attempt)) + random.uniform(0.0, 0.35)
+    time.sleep(sleep_seconds)
+
+
 def create_response(
     *,
     model: str,
@@ -37,6 +76,8 @@ def create_response(
     base_url: str | None = None,
     max_output_tokens: int | None = None,
     store: bool = False,
+    max_retries: int | None = None,
+    retry_backoff_seconds: float | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -59,16 +100,34 @@ def create_response(
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"OpenAI API request failed with HTTP {exc.code}: {error_body}"
-        ) from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
+    retries = max_retries if max_retries is not None else max_retries_from_env()
+    backoff = (
+        retry_backoff_seconds
+        if retry_backoff_seconds is not None
+        else retry_backoff_seconds_from_env()
+    )
+    raw = ""
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(request) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            should_retry = exc.code in RETRYABLE_HTTP_CODES and attempt < retries
+            if not should_retry:
+                raise RuntimeError(
+                    f"OpenAI API request failed with HTTP {exc.code}: {error_body}"
+                ) from exc
+            _sleep_for_retry(
+                base_backoff=backoff,
+                attempt=attempt,
+                retry_after=_retry_after_seconds(exc),
+            )
+        except urllib.error.URLError as exc:
+            if attempt >= retries:
+                raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
+            _sleep_for_retry(base_backoff=backoff, attempt=attempt)
 
     parsed = json.loads(raw)
     if not isinstance(parsed, dict):

@@ -23,6 +23,7 @@ Goals:
 - surface this week's meaningful changes
 - propose interesting story angles (including non-obvious/weird ones)
 - suggest concrete charts/visuals tied to available metrics
+- rank ideas with real editorial discipline, not equal-weight slot filling
 
 Priority context to use when available:
 - `story_pegs`
@@ -37,6 +38,10 @@ Priority context to use when available:
 - `league_relative.top_percentile_movers`
 - `context_quality`
 - `chart_hooks`
+- `next_fixture`
+- `next_opponent_last_week`
+- `next_opponent_recent_form`
+- `next_week_matchup_lens`
 
 Constraints:
 - do not invent unavailable fields
@@ -45,12 +50,18 @@ Constraints:
 - respect `context_quality.overall_confidence` and `context_quality.notes`
 - use natural football language in headlines, claims, and story angles
 - do not use raw schema/field names as the reader-facing phrasing unless absolutely necessary
+- do not use em dashes (`—`) in output text; use commas, colons, or parentheses instead
 - express rankings in natural language for readers
 - treat sparse, zero-heavy, or low-variance metrics as weak signals by default
 - do not make a weak signal the lead story unless it is corroborated by at least one stronger independent signal
 - distinguish:
   - one-week spike vs season-to-date strength
   - team-relative change vs peer-relative change
+- if only one strong story exists, say so; do not manufacture equal-strength alternates
+- a primary story must do real work: explain the result, explain a tension, or explain why the week matters going forward
+- reject ideas that are statistically true but editorially trivial
+- do not let candidate slots pressure you into inventing weak stories
+- titles and angles must sound like article ideas, not chart labels or field summaries
 
 Interpretation rules:
 - treat `deltas_vs_season_avg` as team-relative context
@@ -64,6 +75,15 @@ Interpretation rules:
 - if team-relative and peer-relative readings conflict, call that out explicitly as a tension
 - if a signal comes from a sparse discipline metric (for example `red_cards`), require corroboration before promoting it
 - overlapping signals across `story_pegs`, `week_flags`, `league_relative`, and `chart_hooks` should be treated as stronger than isolated signals
+- kill a story candidate if it:
+  - depends on a single sparse metric with no corroboration
+  - merely repeats the executive summary without adding a sharper angle
+  - sounds like a metric report rather than a story a reader would care about
+- to qualify as a primary story, an idea should satisfy at least two of:
+  - explains the result
+  - explains an important tension
+  - is supported by both team-relative and peer-relative context
+  - gives a clear next-week question worth tracking
 
 Output exactly in this structure (in a codeblock):
 
@@ -112,6 +132,17 @@ Output exactly in this structure (in a codeblock):
       "season_to_date_signal": "..."
     }
   ],
+  "chart_plan": [
+    {
+      "id": "C1",
+      "title": "...",
+      "priority": "primary|secondary|optional",
+      "chart_type": "metric_trend|result_form|metric_compare|opponent_profile",
+      "metrics": ["..."],
+      "target": "main|backing",
+      "why": "..."
+    }
+  ],
   "recommended_story": {
     "story_id": "S1",
     "reason": "...",
@@ -128,6 +159,7 @@ Additional instructions:
 - if `story_pegs` exists, start by evaluating those candidates first and only invent new candidates if they are weak
 - if `league_relative.top_percentile_movers` exists, use it to nominate at least one hypothesis or explain why it is not interesting
 - if `chart_hooks` exists, prefer those charts before inventing new ones
+- produce a `chart_plan` that can be rendered locally; do not assume image generation
 - if `week_flags` and `top_percentile_movers` overlap, treat that as a stronger signal
 - if `context_quality.overall_confidence` is `low`, explicitly say which claims are fragile
 - weak signals should usually remain secondary hypotheses unless corroborated
@@ -141,6 +173,23 @@ Additional instructions:
 - avoid titles like `opponent_shots_on_target spike`; prefer plain-English football phrasing like `opponents are finding cleaner looks on goal`
 - do not write reader-facing prose like `rank 1/20`, `3/18`, or `percentile_high 0.94`
 - instead write natural language like `best in the league that week`, `third in the league`, `among the league's strongest`, or `near the top of the division`
+- avoid em dashes in reader-facing prose
+- do not make all story candidates feel equally important
+- `S1` should be clearly the best idea if a clear best idea exists
+- `S2` and `S3` should exist only if they add something genuinely different
+- if a weak or weird idea is included, make that weakness visible in `why_not_top_story`
+
+Bad story framing examples:
+- `Corners spike`
+- `Opponent shots rise`
+- `Peer percentile drop`
+- `Shots on target decline`
+
+Better story framing examples:
+- `Arsenal survived the kind of pressure that usually costs points`
+- `Territory was there; the finishing touch was not`
+- `The clean sheet held, but the warning signs sat underneath it`
+- `Set pieces gave Arsenal field position, not real threat`
 
 When ranking options, prioritize:
 1) explanatory power

@@ -142,7 +142,7 @@ def test_build_weekly_context_picks_latest_week_and_computes_deltas() -> None:
     assert context["largest_upward_deltas"][0] == {
         "metric": "opponent_fouls",
         "delta": 2.3333,
-        "direction_for_team": "harmful",
+        "direction_for_team": "beneficial",
     }
     assert context["largest_downward_deltas"][0] == {
         "metric": "shots",

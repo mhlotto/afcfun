@@ -70,6 +70,319 @@ def _result_halfwin(value: str) -> float:
     return 0.0
 
 
+def _resolve_schedule_path(
+    *,
+    explicit_schedule_json: str | None,
+    team: str,
+    season: str,
+) -> Path | None:
+    if explicit_schedule_json:
+        path = Path(explicit_schedule_json).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        return path.resolve()
+
+    team_slug = _slug(team)
+    candidates = [
+        Path(f"data/{team_slug}-epl/{team_slug}-schedule-{season}.normalized.json"),
+        Path(f"data/{team_slug}-epl/{team_slug}-schedule-{season}.json"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
+def _load_schedule_rows(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if isinstance(payload, dict):
+        rows = payload.get("rows", [])
+        if isinstance(rows, list):
+            return [row for row in rows if isinstance(row, dict)]
+    return []
+
+
+def _extract_next_fixture(
+    *,
+    schedule_rows: list[dict[str, Any]],
+    current_week: int,
+) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for row in schedule_rows:
+        matchday = _as_float(row.get("matchday"))
+        if matchday is None:
+            continue
+        week = int(matchday)
+        if week <= current_week:
+            continue
+        candidates.append(row)
+    if not candidates:
+        return None
+    next_row = sorted(candidates, key=lambda item: int(_as_float(item.get("matchday")) or 0))[0]
+    return {
+        "matchday": int(_as_float(next_row.get("matchday")) or 0),
+        "opponent": str(next_row.get("opponent") or next_row.get("opponent_canonical_name") or ""),
+        "opponent_canonical_name": str(next_row.get("opponent_canonical_name") or ""),
+        "venue": str(next_row.get("home_away") or ""),
+        "kickoff_utc": str(next_row.get("kickoff_utc") or ""),
+        "stadium": str(next_row.get("venue") or ""),
+    }
+
+
+def _find_team_block_by_name(report: dict[str, Any], team_name: str) -> dict[str, Any] | None:
+    needle = team_name.strip().lower()
+    if not needle:
+        return None
+    for block in _all_team_blocks(report):
+        block_name = str(block.get("team", "")).strip().lower()
+        if block_name == needle:
+            return block
+    return None
+
+
+def _find_season_block(team_block: dict[str, Any], season: str) -> dict[str, Any] | None:
+    seasons = team_block.get("seasons", [])
+    if not isinstance(seasons, list):
+        return None
+    for block in seasons:
+        if not isinstance(block, dict):
+            continue
+        if str(block.get("season", "")).strip() == season:
+            return block
+    return None
+
+
+def _build_opponent_last_week_context(
+    *,
+    report: dict[str, Any],
+    season: str,
+    opponent_name: str,
+    current_week: int,
+) -> dict[str, Any] | None:
+    opponent_block = _find_team_block_by_name(report, opponent_name)
+    if opponent_block is None:
+        return None
+    opponent_season = _find_season_block(opponent_block, season)
+    if opponent_season is None:
+        return None
+    rows = opponent_season.get("weekly_rows")
+    if not isinstance(rows, list) or not rows:
+        return None
+
+    candidate_rows = [
+        row for row in rows
+        if isinstance(row, dict) and int(row.get("week", 0) or 0) <= current_week
+    ]
+    if not candidate_rows:
+        return None
+    row = sorted(candidate_rows, key=lambda item: int(item.get("week", 0) or 0))[-1]
+
+    goals_for = _as_float(row.get("goals_for"))
+    goals_against = _as_float(row.get("goals_against"))
+    score = None
+    if goals_for is not None and goals_against is not None:
+        score = f"{int(goals_for)}-{int(goals_against)}"
+
+    metrics = [
+        "shots",
+        "shots_on_target",
+        "corners",
+        "fouls",
+        "opponent_shots",
+        "opponent_shots_on_target",
+        "opponent_corners",
+        "opponent_fouls",
+    ]
+    deltas = _compute_deltas(rows=rows, current_row=row, metrics=metrics)
+    directional = _summarize_directional_deltas(deltas, limit=2)
+
+    return {
+        "team": str(opponent_block.get("team", opponent_name)),
+        "week": int(row.get("week", 0) or 0),
+        "result": _result_short(str(row.get("result", ""))),
+        "score": score,
+        "venue": str(row.get("venue", "")),
+        "opponent": str(row.get("opponent", "")),
+        "largest_upward_deltas": directional["largest_upward_deltas"],
+        "largest_downward_deltas": directional["largest_downward_deltas"],
+    }
+
+
+def _recent_rows(
+    *,
+    rows: list[dict[str, Any]],
+    current_week: int,
+    window: int,
+) -> list[dict[str, Any]]:
+    eligible = [
+        row
+        for row in rows
+        if isinstance(row, dict) and int(row.get("week", 0) or 0) <= current_week
+    ]
+    if not eligible:
+        return []
+    eligible = sorted(eligible, key=lambda item: int(item.get("week", 0) or 0))
+    return eligible[-window:]
+
+
+def _mean(values: list[float | None]) -> float:
+    clean = [value for value in values if value is not None]
+    if not clean:
+        return 0.0
+    return round(sum(clean) / len(clean), 4)
+
+
+def _build_recent_form_summary(
+    *,
+    rows: list[dict[str, Any]],
+    current_week: int,
+    window: int,
+) -> dict[str, Any] | None:
+    recent = _recent_rows(rows=rows, current_week=current_week, window=window)
+    if not recent:
+        return None
+    w = d = l = 0
+    points_total = 0
+    halfwin_total = 0.0
+    goal_diff_total = 0.0
+    goals_for_total = 0.0
+    goals_against_total = 0.0
+
+    for row in recent:
+        result = str(row.get("result", ""))
+        key = result.strip().lower()
+        if key == "win":
+            w += 1
+        elif key == "draw":
+            d += 1
+        else:
+            l += 1
+        points_total += _result_points(result)
+        halfwin_total += _result_halfwin(result)
+        gf = _as_float(row.get("goals_for")) or 0.0
+        ga = _as_float(row.get("goals_against")) or 0.0
+        goals_for_total += gf
+        goals_against_total += ga
+        goal_diff_total += (gf - ga)
+
+    count = len(recent)
+    metric_keys = [
+        "shots",
+        "shots_on_target",
+        "corners",
+        "fouls",
+        "opponent_shots",
+        "opponent_shots_on_target",
+        "opponent_corners",
+        "opponent_fouls",
+    ]
+    per_match = {
+        "points_per_match": round(points_total / count, 4),
+        "goals_for_per_match": round(goals_for_total / count, 4),
+        "goals_against_per_match": round(goals_against_total / count, 4),
+        "goal_diff_per_match": round(goal_diff_total / count, 4),
+    }
+    for metric in metric_keys:
+        per_match[f"{metric}_per_match"] = _mean([_as_float(row.get(metric)) for row in recent])
+
+    return {
+        "window": count,
+        "from_week": int(recent[0].get("week", 0) or 0),
+        "to_week": int(recent[-1].get("week", 0) or 0),
+        "wdl": {"w": w, "d": d, "l": l},
+        "points_total": points_total,
+        "halfwin_average": round(halfwin_total / count, 4),
+        "goal_diff_total": round(goal_diff_total, 4),
+        **per_match,
+    }
+
+
+def _build_next_week_matchup_lens(
+    *,
+    team_form: dict[str, Any],
+    opponent_form: dict[str, Any],
+) -> dict[str, Any]:
+    keys = [
+        "points_per_match",
+        "goals_for_per_match",
+        "goals_against_per_match",
+        "shots_per_match",
+        "shots_on_target_per_match",
+        "opponent_shots_per_match",
+        "opponent_shots_on_target_per_match",
+        "corners_per_match",
+        "opponent_corners_per_match",
+    ]
+    deltas: dict[str, float] = {}
+    for key in keys:
+        a = _as_float(team_form.get(key))
+        b = _as_float(opponent_form.get(key))
+        if a is None or b is None:
+            continue
+        deltas[key] = round(a - b, 4)
+    
+    higher_is_better = {
+        "points_per_match",
+        "goals_for_per_match",
+        "goal_diff_per_match",
+        "shots_per_match",
+        "shots_on_target_per_match",
+        "corners_per_match",
+    }
+    lower_is_better = {
+        "goals_against_per_match",
+        "opponent_shots_per_match",
+        "opponent_shots_on_target_per_match",
+        "opponent_corners_per_match",
+        "fouls_per_match",
+    }
+    metric_labels = {
+        "points_per_match": "points per match",
+        "goals_for_per_match": "goals scored per match",
+        "goals_against_per_match": "goals conceded per match",
+        "goal_diff_per_match": "goal difference per match",
+        "shots_per_match": "shots per match",
+        "shots_on_target_per_match": "shots on target per match",
+        "opponent_shots_per_match": "shots allowed per match",
+        "opponent_shots_on_target_per_match": "shots on target allowed per match",
+        "corners_per_match": "corners per match",
+        "opponent_corners_per_match": "corners conceded per match",
+    }
+
+    beneficial: list[dict[str, Any]] = []
+    harmful: list[dict[str, Any]] = []
+    for key, delta in deltas.items():
+        if delta == 0:
+            continue
+        if key in higher_is_better:
+            direction = "beneficial" if delta > 0 else "harmful"
+        elif key in lower_is_better:
+            direction = "harmful" if delta > 0 else "beneficial"
+        else:
+            direction = "beneficial" if delta > 0 else "harmful"
+        item = {
+            "metric": key,
+            "label": metric_labels.get(key, key),
+            "delta": round(delta, 4),
+            "direction_for_team": direction,
+        }
+        if direction == "beneficial":
+            beneficial.append(item)
+        else:
+            harmful.append(item)
+
+    beneficial = sorted(beneficial, key=lambda item: abs(float(item.get("delta", 0.0))), reverse=True)
+    harmful = sorted(harmful, key=lambda item: abs(float(item.get("delta", 0.0))), reverse=True)
+    return {
+        "window": int(team_form.get("window", 0) or 0),
+        "team_minus_opponent": deltas,
+        "top_beneficial": beneficial[:2],
+        "top_harmful": harmful[:2],
+    }
+
+
 def _parse_metrics(value: str | None, fallback: list[str]) -> list[str]:
     if not value:
         return list(fallback)
@@ -168,15 +481,32 @@ def _compute_deltas(
 
 def _delta_direction_for_team(metric: str, delta: float) -> str:
     metric_key = metric.strip().lower()
-    lower_is_better_keywords = (
-        "opponent_",
-        "against",
+    # Explicit exceptions where an increase for opponent_* can still benefit the team.
+    opponent_higher_is_beneficial = {
+        "opponent_fouls",
+        "opponent_yellow_cards",
+        "opponent_red_cards",
+        "opponent_bookings_points",
+        "opponent_free_kicks_conceded",
+        "opponent_offsides",
+    }
+    own_higher_is_harmful = {
+        "goals_against",
+        "opponent_total_goals",
+        "opponent_halftime_goals",
         "fouls",
         "yellow_cards",
         "red_cards",
         "bookings_points",
-    )
-    if any(token in metric_key for token in lower_is_better_keywords):
+        "free_kicks_conceded",
+        "offsides",
+    }
+
+    if metric_key in opponent_higher_is_beneficial:
+        return "beneficial" if delta > 0 else "harmful"
+    if metric_key.startswith("opponent_"):
+        return "harmful" if delta > 0 else "beneficial"
+    if metric_key in own_higher_is_harmful:
         return "harmful" if delta > 0 else "beneficial"
     return "beneficial" if delta > 0 else "harmful"
 
@@ -1330,6 +1660,7 @@ def build_weekly_context(
     week: int | None = None,
     metrics: list[str] | None = None,
     window: int = 5,
+    schedule_json: str | None = None,
 ) -> dict[str, Any]:
     team_block = _select_team_block(report, team)
     season_block = _select_season_block(team_block, season)
@@ -1487,6 +1818,65 @@ def build_weekly_context(
             "report_json": "",
         },
     }
+    schedule_path = _resolve_schedule_path(
+        explicit_schedule_json=schedule_json,
+        team=selected_team,
+        season=selected_season,
+    )
+    if schedule_path is not None and schedule_path.exists():
+        schedule_rows = _load_schedule_rows(schedule_path)
+        next_fixture = _extract_next_fixture(
+            schedule_rows=schedule_rows,
+            current_week=current_week,
+        )
+        if next_fixture is not None:
+            context["next_fixture"] = next_fixture
+            context["provenance"]["schedule_json"] = str(schedule_path)
+            opponent_lookup_name = str(
+                next_fixture.get("opponent_canonical_name")
+                or next_fixture.get("opponent")
+                or ""
+            )
+            opponent_last_week = _build_opponent_last_week_context(
+                report=report,
+                season=selected_season,
+                opponent_name=opponent_lookup_name,
+                current_week=current_week,
+            )
+            if opponent_last_week is not None:
+                context["next_opponent_last_week"] = opponent_last_week
+            opponent_block = _find_team_block_by_name(report, opponent_lookup_name)
+            if opponent_block is not None:
+                opponent_season = _find_season_block(opponent_block, selected_season)
+                if opponent_season is not None:
+                    opponent_rows = opponent_season.get("weekly_rows")
+                    if isinstance(opponent_rows, list) and opponent_rows:
+                        opponent_recent_form = _build_recent_form_summary(
+                            rows=opponent_rows,
+                            current_week=current_week,
+                            window=window,
+                        )
+                        if opponent_recent_form is not None:
+                            context["next_opponent_recent_form"] = {
+                                "team": str(opponent_block.get("team", opponent_lookup_name)),
+                                **opponent_recent_form,
+                            }
+                            team_recent_form = _build_recent_form_summary(
+                                rows=weekly_rows,
+                                current_week=current_week,
+                                window=window,
+                            )
+                            if team_recent_form is not None:
+                                context["next_week_matchup_lens"] = _build_next_week_matchup_lens(
+                                    team_form=team_recent_form,
+                                    opponent_form=opponent_recent_form,
+                                )
+        else:
+            context["data_gaps"].append(
+                "No upcoming fixture found in schedule after selected week."
+            )
+    else:
+        context["data_gaps"].append("No schedule file found for next-fixture context.")
     if isinstance(current.get("annotation"), dict):
         context["annotations_for_week"] = [dict(current["annotation"])]
     return context
@@ -1529,6 +1919,14 @@ def main() -> int:
         help="Recent-form window size (last N matches up to selected week).",
     )
     parser.add_argument(
+        "--schedule-json",
+        default="",
+        help=(
+            "Optional schedule JSON path for next-fixture enrichment. "
+            "If omitted, auto-detects data/<team>-epl/<team>-schedule-<season>.normalized.json."
+        ),
+    )
+    parser.add_argument(
         "--extra-json",
         default=None,
         help="Optional JSON object merged into context (rankings/deltas/anomalies/etc).",
@@ -1565,6 +1963,7 @@ def main() -> int:
         week=args.week,
         metrics=selected_metrics,
         window=args.window,
+        schedule_json=args.schedule_json or None,
     )
     context["provenance"]["report_json"] = str(report_path)
     extra = _load_extra_context(args.extra_json)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,35 @@ def _write_debug_artifacts(
     raw_path.write_text(output_text, encoding="utf-8")
     response_path.write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
     return raw_path, response_path
+
+
+def _strip_numbered_scaffold(markdown: str) -> str:
+    lines = markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out: list[str] = []
+    heading_map = {
+        "title": "#",
+        "one-paragraph thesis": "##",
+        "what happened this week": "##",
+        "what the peer context says": "##",
+        "why it might matter": "##",
+        "what could break this read (caveats)": "##",
+        "what could break this read": "##",
+        "what to watch next week": "##",
+        "data appendix": "##",
+    }
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        match = re.match(r"^\d+\)\s+(.+)$", stripped)
+        if match:
+            label = match.group(1).strip()
+            prefix = heading_map.get(label.lower())
+            if prefix:
+                out.append(f"{prefix} {label}")
+            else:
+                out.append(label)
+            continue
+        out.append(raw_line)
+    return "\n".join(out).strip() + "\n"
 
 
 def main() -> int:
@@ -192,7 +222,7 @@ def main() -> int:
             f"(reason: {reason}). Wrote debug artifacts to {raw_path} and {response_path}. "
             "Try rerunning with a larger --max-output-tokens."
         )
-    markdown = markdown.strip() + "\n"
+    markdown = _strip_numbered_scaffold(markdown)
     out_path.write_text(markdown, encoding="utf-8")
     print(f"Wrote {out_path}")
     return 0

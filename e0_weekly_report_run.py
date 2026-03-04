@@ -56,6 +56,7 @@ def _build_embedded_animation_artifacts(
     metric: str,
     style: str,
     interval_ms: int,
+    through_week: int | None,
 ) -> list[dict[str, object]]:
     assets_dir = out_html.parent / f"{out_html.stem}_assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +85,11 @@ def _build_embedded_animation_artifacts(
                 competition_code=competition_code,
                 seasons=[season],
             )
+            if through_week is not None:
+                halfwin_series = {
+                    key: [point for point in points if point.week <= through_week]
+                    for key, points in halfwin_series.items()
+                }
             halfwin_payload = _build_halfwin_payload_from_series(
                 halfwin_series,
                 [team],
@@ -118,6 +124,11 @@ def _build_embedded_animation_artifacts(
                 competition_code=competition_code,
                 seasons=[season],
             )
+            if through_week is not None:
+                metric_series = {
+                    key: [point for point in points if point.week <= through_week]
+                    for key, points in metric_series.items()
+                }
             metric_payload = _build_metric_payload(
                 metric_series,
                 metric=metric,
@@ -317,12 +328,13 @@ def main() -> int:
             metric=args.embed_metric,
             style=args.embed_style,
             interval_ms=max(50, args.embed_interval_ms),
+            through_week=args.through_week,
         )
         report["artifacts"] = {"embedded_animations": embeds}
 
     assert_valid_weekly_report_schema(report)
     write_report_json(report, out_path=out_json, pretty=True)
-    render_report_html(report, out_path=out_html, style=args.report_style)
+    render_report_html(report, out_path=out_html, in_path=out_json, style=args.report_style)
 
     print(f"Wrote {out_json}")
     print(f"Wrote {out_html}")

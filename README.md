@@ -478,3 +478,41 @@ python3 e0_weekly_prompt_packet.py \
   --week 28 \
   --write-default
 ```
+
+## Numbered step pipeline (recommended)
+
+Run everything in order for selected weeks:
+
+```bash
+OPENAI_API_KEY=... ./scripts/step99_full_pipeline.sh 1 3 5
+```
+
+Or all available weeks for the selected team/season:
+
+```bash
+OPENAI_API_KEY=... ./scripts/step99_full_pipeline.sh all
+```
+
+Parallel API execution is supported for ideation/blog stages:
+
+```bash
+OPENAI_API_KEY=... PARALLELISM=2 ./scripts/step99_full_pipeline.sh 1 3 5
+```
+
+You can tune per stage:
+
+- `IDEATE_PARALLELISM`
+- `BLOG_PARALLELISM`
+
+Retry/backoff controls for API transient failures (`429`/`5xx`):
+
+- `OPENAI_MAX_RETRIES` (default: `4`)
+- `OPENAI_RETRY_BACKOFF_SECONDS` (default: `1.5`)
+
+Chart-planning flow:
+
+- Ideation now emits a `chart_plan` block (API output JSON).
+- `step04_select_visual.sh` resolves that plan to local renderable artifacts via:
+  - `e0_weekly_chart_plan_resolve.py`
+- Resolved chart intents are written to:
+  - `docs/reports/weekly-chart-plan-resolved-w<week>.json`

@@ -113,13 +113,71 @@ def test_build_site_writes_index_and_week_pages(tmp_path: Path) -> None:
 
     blog_path = reports_dir / "weekly-post-arsenal-20252026-w1.md"
     blog_path.write_text(
-        "# Week 1 draft\n\n- first point\n- second point\n",
+        (
+            "1) Title\n"
+            "Arsenal open with control\n\n"
+            "2) One-paragraph thesis\n"
+            "Arsenal started well and looked composed.\n\n"
+            "3) What happened this week\n"
+            "- first point\n"
+            "- second point\n\n"
+            "8) Data appendix\n"
+            "metric.a: 1\n"
+        ),
         encoding="utf-8",
     )
 
     notes_path = reports_dir / "publication-notes-arsenal-20252026-w1.md"
     notes_path.write_text(
         "## Publish notes\n\nHold this one for later.\n",
+        encoding="utf-8",
+    )
+
+    asset_dir = reports_dir / "weekly-report-arsenal-20252026-through-w1-2026-02-28_assets"
+    asset_dir.mkdir()
+    (asset_dir / "arsenal-2025-2026-halfwin.html").write_text(
+        "<html><body>halfwin</body></html>\n",
+        encoding="utf-8",
+    )
+    report_json_path = reports_dir / "weekly-report-arsenal-20252026-through-w1-2026-02-28.json"
+    report_json_path.write_text(
+        """
+{
+  "artifacts": {
+    "embedded_animations": [
+      {
+        "team": "Arsenal",
+        "season": "2025-2026",
+        "kind": "halfwin",
+        "path": "weekly-report-arsenal-20252026-through-w1-2026-02-28_assets/arsenal-2025-2026-halfwin.html"
+      }
+    ]
+  }
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    visual_selection_path = reports_dir / "visual-selection-arsenal-20252026-w1-2026-02-28.json"
+    visual_selection_path.write_text(
+        f"""
+{{
+  "team": "Arsenal",
+  "season": "2025-2026",
+  "week": 1,
+  "report_date": "2026-02-28",
+  "editorial_selection_file": "{selection_path}",
+  "report_json_file": "{report_json_path}",
+  "selected_visual_id": "halfwin",
+  "selected_visual_title": "Half-win animation",
+  "selected_visual_kind": "halfwin",
+  "selected_visual_metric": "",
+  "selected_visual_path": "weekly-report-arsenal-20252026-through-w1-2026-02-28_assets/arsenal-2025-2026-halfwin.html",
+  "selection_mode": "auto-v1",
+  "selection_reason": "Auto-selected halfwin."
+}}
+""".strip()
+        + "\n",
         encoding="utf-8",
     )
 
@@ -139,15 +197,21 @@ def test_build_site_writes_index_and_week_pages(tmp_path: Path) -> None:
     assert sources_page in written
 
     html = week_page.read_text(encoding="utf-8")
-    assert "Fast opening week" in html
+    assert "Arsenal open with control" in html
     assert "Simple test selection." not in html
     assert "../../../reports/weekly-context-arsenal-20252026-w1-2026-02-28.json" not in html
     assert "Sources &amp; caveats" in html
-    assert "Draft post" in html
-    assert "Week 1 draft" in html
+    assert "Draft post" not in html
+    assert "What happened this week" in html
     assert "Publication notes" in html
+    assert "Half-win animation" in html
+    assert "Suggested visuals" not in html
+    assert "arsenal-2025-2026-halfwin.html" in html
 
     sources_html = sources_page.read_text(encoding="utf-8")
     assert "Simple test selection." in sources_html
     assert "../../../reports/weekly-context-arsenal-20252026-w1-2026-02-28.json" in sources_html
     assert "Confidence and caveats" in sources_html
+    assert "Visual selection" in sources_html
+    assert "Suggested visuals" in sources_html
+    assert "Data appendix" in sources_html

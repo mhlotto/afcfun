@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -148,7 +149,11 @@ def main() -> int:
     )
     parser.add_argument("--ideation-json", required=True, help="ChatGPT ideation JSON path.")
     parser.add_argument("--context-json", required=True, help="Weekly context JSON path.")
-    parser.add_argument("--story-id", required=True, help="Selected story id from story_candidates.")
+    parser.add_argument(
+        "--story-id",
+        default="S1",
+        help="Selected story id from story_candidates (default: S1).",
+    )
     parser.add_argument(
         "--secondary-story-id",
         action="append",
@@ -190,6 +195,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    explicit_story_id = "--story-id" in sys.argv
+    selection_mode = args.selection_mode
+    if selection_mode == "manual" and not explicit_story_id and args.story_id == "S1":
+        selection_mode = "auto-s1"
+    selection_reason = args.reason
+    if not selection_reason and not explicit_story_id and args.story_id == "S1":
+        selection_reason = "Auto-selected S1."
+
     ideation = _load_json(args.ideation_json)
     context = _load_json(args.context_json)
 
@@ -201,9 +214,9 @@ def main() -> int:
         selected_story_id=args.story_id,
         secondary_story_ids=list(args.secondary_story_id),
         rejected_story_ids=list(args.rejected_story_id),
-        selection_reason=args.reason,
+        selection_reason=selection_reason,
         notes=list(args.note),
-        selection_mode=args.selection_mode,
+        selection_mode=selection_mode,
     )
 
     out_path = (

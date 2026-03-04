@@ -7,7 +7,9 @@ set -euo pipefail
 # - Arsenal
 # - 2025-2026
 # - ideation JSON regeneration
-# - blog markdown regeneration (if an editorial-selection artifact exists)
+# - default S1 editorial selection creation when missing
+# - primary visual selection creation when missing
+# - blog markdown regeneration
 # - site rebuild at the end
 #
 # Usage:
@@ -63,7 +65,12 @@ for week in "$@"; do
   context_matches=(docs/reports/weekly-context-"$TEAM_SLUG"-"$SEASON_KEY"-w"$week"-*.json)
   if [[ ${#context_matches[@]} -ne 1 ]]; then
     echo "expected exactly one context JSON for week $week, found ${#context_matches[@]}" >&2
-    printf '  %s\n' "${context_matches[@]}" >&2
+    if [[ ${#context_matches[@]} -gt 0 ]]; then
+      printf '  %s\n' "${context_matches[@]}" >&2
+    else
+      echo "  expected pattern: docs/reports/weekly-context-${TEAM_SLUG}-${SEASON_KEY}-w${week}-*.json" >&2
+      echo "  generate the weekly report/context artifacts first" >&2
+    fi
     exit 1
   fi
   context_path="${context_matches[0]}"
@@ -77,16 +84,43 @@ for week in "$@"; do
   selection_matches=(docs/reports/editorial-selection-"$TEAM_SLUG"-"$SEASON_KEY"-w"$week"-*.json)
   if [[ ${#selection_matches[@]} -eq 1 ]]; then
     selection_path="${selection_matches[0]}"
-    echo "Generating blog draft for week $week"
-    "$PYTHON_BIN" "$ROOT_DIR/e0_weekly_blog_generate.py" \
-      --selection-json "$selection_path" \
-      --overwrite \
-      --max-output-tokens "$BLOG_MAX_OUTPUT_TOKENS"
   elif [[ ${#selection_matches[@]} -eq 0 ]]; then
-    echo "Skipping blog draft for week $week (no editorial-selection artifact found)"
+    ideation_path="docs/reports/weekly-chatgpt-ideate-w${week}.json"
+    echo "Creating default editorial selection for week $week (S1)"
+    "$PYTHON_BIN" "$ROOT_DIR/e0_weekly_editorial_select.py" \
+      --ideation-json "$ideation_path" \
+      --context-json "$context_path" \
+      --story-id S1 \
+      --selection-mode auto-s1 \
+      --reason "Auto-selected S1." \
+      >/dev/null
+    selection_matches=(docs/reports/editorial-selection-"$TEAM_SLUG"-"$SEASON_KEY"-w"$week"-*.json)
+    if [[ ${#selection_matches[@]} -ne 1 ]]; then
+      echo "failed to create editorial-selection JSON for week $week" >&2
+      exit 1
+    fi
+    selection_path="${selection_matches[0]}"
   else
     echo "expected at most one editorial-selection JSON for week $week, found ${#selection_matches[@]}" >&2
     printf '  %s\n' "${selection_matches[@]}" >&2
+    exit 1
+  fi
+
+  echo "Generating blog draft for week $week"
+  "$PYTHON_BIN" "$ROOT_DIR/e0_weekly_blog_generate.py" \
+    --selection-json "$selection_path" \
+    --overwrite \
+    --max-output-tokens "$BLOG_MAX_OUTPUT_TOKENS"
+
+  visual_matches=(docs/reports/visual-selection-"$TEAM_SLUG"-"$SEASON_KEY"-w"$week"-*.json)
+  if [[ ${#visual_matches[@]} -eq 0 ]]; then
+    echo "Creating default visual selection for week $week"
+    "$PYTHON_BIN" "$ROOT_DIR/e0_weekly_visual_select.py" \
+      --selection-json "$selection_path" \
+      >/dev/null
+  elif [[ ${#visual_matches[@]} -gt 1 ]]; then
+    echo "expected at most one visual-selection JSON for week $week, found ${#visual_matches[@]}" >&2
+    printf '  %s\n' "${visual_matches[@]}" >&2
     exit 1
   fi
 done
